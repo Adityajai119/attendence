@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC Registration System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #1a73e8;
+            text-align: center;
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .button {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 10px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #registerNumber {
+            font-size: 24px;
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #e8f0fe;
+            border-radius: 4px;
+        }
+
+        .records {
+            margin-top: 20px;
+        }
+
+        .record-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NFC Registration System</h1>
+        <button id="scanButton" class="button">Start NFC Scan</button>
+        <div id="status" class="status"></div>
+        <div id="registerNumber"></div>
+        <div id="records" class="records"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDRln_DhVWeUcSYjojqhnn6MnTCu9K79Go",
+            authDomain: "attendence-616f1.firebaseapp.com",
+            databaseURL: "https://attendence-616f1-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "attendence-616f1",
+            storageBucket: "attendence-616f1.appspot.com",
+            messagingSenderId: "148785605981",
+            appId: "1:148785605981:web:7bc84d0c593e15491bccb4"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // DOM Elements
+        const scanButton = document.getElementById('scanButton');
+        const statusDiv = document.getElementById('status');
+        const registerNumberDiv = document.getElementById('registerNumber');
+        const recordsDiv = document.getElementById('records');
+
+        // Function to update status with appropriate styling
+        function updateStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + (isError ? 'error' : 'success');
+        }
+
+        // Function to store registration in Firebase
+        async function storeRegistration(registerNumber) {
+            try {
+                const timestamp = new Date().toISOString();
+                await push(ref(database, 'registrations'), {
+                    registerNumber: registerNumber,
+                    timestamp: timestamp
+                });
+                updateStatus('Registration stored successfully!');
+            } catch (error) {
+                updateStatus('Error storing registration: ' + error.message, true);
+            }
+        }
+
+        // Listen for registration updates
+        onValue(ref(database, 'registrations'), (snapshot) => {
+            recordsDiv.innerHTML = '';
+            snapshot.forEach((childSnapshot) => {
+                const data = childSnapshot.val();
+                const div = document.createElement('div');
+                div.className = 'record-item';
+                div.textContent = `Register: ${data.registerNumber} - Time: ${new Date(data.timestamp).toLocaleString()}`;
+                recordsDiv.appendChild(div);
+            });
+        });
+
+        // NFC Scanning functionality
+        scanButton.addEventListener('click', async () => {
+            if (!('NDEFReader' in window)) {
+                updateStatus('NFC is not supported on this device', true);
+                return;
+            }
+
+            try {
+                const ndef = new NDEFReader();
+                await ndef.scan();
+                
+                updateStatus('Scan started! Please hold your NFC tag near the device...');
+                
+                ndef.addEventListener('reading', ({ message }) => {
+                    try {
+                        const record = message.records[0];
+                        const registerNumber = new TextDecoder().decode(record.data);
+                        registerNumberDiv.textContent = `Register Number: ${registerNumber}`;
+                        storeRegistration(registerNumber);
+                    } catch (error) {
+                        updateStatus('Error reading NFC tag: ' + error.message, true);
+                    }
+                });
+
+            } catch (error) {
+                updateStatus('Error starting NFC scan: ' + error.message, true);
+            }
+        });
+    </script>
+</body>
+</html>
